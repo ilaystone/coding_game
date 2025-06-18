@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <cctype>
 
 using namespace std;
 
@@ -34,19 +35,27 @@ double find_resistor_value(const string &key, const vector<pair<string, double>>
     throw runtime_error("Resistor not found: " + key);
 }
 
-double parallel(double a, double b)
-{
-    return 1.0 / (1.0 / a + 1.0 / b);
+double parallel(const std::vector<double>& valuesToEvaluate) {
+    if (valuesToEvaluate.empty()) return 0.0; // Avoid division by zero
+    double sumOfReciprocals = 0.0;
+    for (double value : valuesToEvaluate) {
+        sumOfReciprocals += 1.0 / value;
+    }
+    return 1.0 / sumOfReciprocals;
 }
 
-double series(double a, double b)
-{
-    return a + b;
+double series(const std::vector<double>& valuesToEvaluate) {
+    double total = 0.0;
+    for (double value : valuesToEvaluate) {
+        total += value;
+    }
+    return total;
 }
 
 double eval_circuit_expr(string &expr, vector<pair<string, double>> &resistors)
 {
-    double (*op)(double, double);
+    cerr << "eval_circuit_expr: " << expr << endl;
+    double (*op)(const vector<double> &);
     expr = trim(expr);
 
     // check current expression type
@@ -59,67 +68,48 @@ double eval_circuit_expr(string &expr, vector<pair<string, double>> &resistors)
     string new_expr = expr.substr(1, expr.size() - 2);
     new_expr = trim(new_expr);
 
-    cerr << new_expr << endl;
-
-    double left = 0.0;
-    double right = 0.0;
+    vector<double> valuesToEvaluate;
     int pos = 0;
 
-    // determine left side
-    if (new_expr[0] == '(' || new_expr[0] == '[')
+    while (pos < new_expr.length())
     {
-        int balance = 1;
-
-        while (balance > 0)
+        if (new_expr[pos] == '(' || new_expr[pos] == '[')
         {
+            int balance = 1;
+            int startIndex = pos;
+            string temp = "";
+    
+            while (balance > 0)
+            {
+                temp += new_expr[pos];
+                pos++;
+                if (new_expr[pos] == ')' || new_expr[pos] == ']')
+                    balance--;
+                if (new_expr[pos] == '(' || new_expr[pos] == '[')
+                    balance++;
+            };
+            temp += new_expr[pos];
+            valuesToEvaluate.push_back(eval_circuit_expr(temp, resistors));
             pos++;
-            if (new_expr[0] == ')' || new_expr[0] == ']')
-                balance--;
-            if (new_expr[0] == '(' || new_expr[0] == '[')
-                balance++;
-        };
-        string temp = new_expr.substr(0, pos + 1);
-        left = eval_circuit_expr(temp, resistors);
-        cerr << "left is an expression: " << new_expr.substr(0, pos + 1) << endl;
-    }
-    else
-    {
-        left = find_resistor_value(string(1, new_expr[0]), resistors);
-        cerr << "left is a value: " << string(1, new_expr[0]) << endl;
-    }
-
-    // skip white spaces
-    pos++;
-    while (new_expr[pos] == ' ')
-        pos++;
-
-    int start = pos;
-    // determin right side
-    if (new_expr[pos] == '(' || new_expr[pos] == '[')
-    {
-        int balance = 1;
-
-        while (balance > 0)
+        }
+        else
         {
-            pos++;
-            if (new_expr[pos] == ')' || new_expr[pos] == ']')
-                balance--;
-            if (new_expr[pos] == '(' || new_expr[pos] == '[')
-                balance++;
-        };
-        string temp = new_expr.substr(start, pos + 1);
-        right = eval_circuit_expr(temp, resistors);
-        cerr << "right is an expression: " << new_expr.substr(start, pos + 1) << endl;
-    }
-    else
-    {
-        right = find_resistor_value(string(1, new_expr[pos]), resistors);
-        cerr << "left is a value: " << string(1, new_expr[pos]) << endl;
+            cerr << "value: ";
+            int startIndex = pos;
+            string temp = "";
+            while (isalpha(new_expr[pos])) {
+                temp += new_expr[pos];
+                pos++;
+            }
+            valuesToEvaluate.push_back(find_resistor_value(temp, resistors));
+            cerr << "*" << temp << '*' << endl;
+        }
+
+        // bypass whitespaces
+        while (new_expr[pos] == ' ') pos++;
     }
 
-    cerr << left << ' ' << right << endl;
-
-    return op(left, right);
+    return op(valuesToEvaluate);
 }
 
 int main()
